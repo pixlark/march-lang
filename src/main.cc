@@ -18,6 +18,7 @@
 #include "lexer.cc"
 #include "parser.cc"
 #include "ast-deallocation.cc"
+#include "collection.cc"
 #include "value.cc"
 #include "symbol-table.cc"
 
@@ -153,9 +154,9 @@ struct VM {
 			assert(instr.argument.type == VALUE_INTEGER);
 			assert(instr.argument.integer >= 0);
 			
-			Obj_Tuple * tuple = (Obj_Tuple*) malloc(sizeof(Obj_Tuple)); // @GC
+			Obj_Tuple * tuple = (Obj_Tuple*) Collection::alloc(sizeof(Obj_Tuple));
 			tuple->length = instr.argument.integer;
-			tuple->elements = (Value*) malloc(sizeof(Value) * tuple->length); // @GC
+			tuple->elements = (Value*) Collection::alloc(sizeof(Value) * tuple->length);
 			for (int i = tuple->length - 1; i >= 0; i--) {
 				tuple->elements[i] = op_stack.pop();
 			}
@@ -179,6 +180,12 @@ struct VM {
 			break;
 		}
 	}
+	void mark_all_bound_values()
+	{
+		for (int i = 0; i < global_table.values.size; i++) {
+			global_table.values[i].mark_for_gc();
+		}
+	}
 };
 
 int main(int argc, char ** argv)
@@ -195,33 +202,43 @@ int main(int argc, char ** argv)
 	}
 
 	Intern::init();
+	Collection::init();
 	Lexer    lexer(source);
 	Parser   parser(&lexer);
 	VM vm = VM::create();
 	
 	while (!parser.at_end()) {
+		// Get AST
 		Expr * expr = parser.parse_expr();
 
-		/*
-		char * s = expr->to_string();
-		printf("%s\n", s);
-		free(s);*/
-
+		// Compile AST to bytecode
 		Compiler compiler;
 		compiler.alloc();
 		compiler.compile_expr(expr);
 		compiler.source.push(Instr::with_type(INSTR_POP_AND_OUTPUT));
+
+		// Run bytecode
 		vm.prime(compiler.source.arr, compiler.source.size);
 		while (!vm.halted) {
 			vm.step();
 		}
-		compiler.dealloc();
 
+		// Free some stuff
+		compiler.dealloc();
 		expr->deep_free();
 		free(expr);
+
+		// Run garbage collector
+		vm.mark_all_bound_values();
+		size_t allocations_before = Collection::ptrs.size;
+		Collection::collect_unmarked();
+		printf("Collected %d references; from %d to %d\n",
+			   allocations_before - Collection::ptrs.size,
+			   allocations_before,  Collection::ptrs.size);
 	}
 
 	vm.destroy();
 	free((void*) source);
+	Collection::destroy_everything();
 	Intern::destroy_everything();
 }
