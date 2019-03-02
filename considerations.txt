@@ -1,0 +1,12 @@
+** Strings and Symbols **
+
+Right now there is no clear line between strings and symbols. This to
+keep the "self-hosted" idea of having as much as possible stored in
+language-based structures. This enables greatly simplified VM
+instructions, as well as extensive reflection. However, this causes
+some problems. Symbols as well as constant string literals are
+interned, which is taken advantage of in symbol tables. However, any
+*constructed* strings will fail in a lookup exactly because of
+this. The solution here is that, whenever a user coerces a string into
+a symbol, said string is interned. Still, this is a dangerous area to
+tread, so we should be extremely careful around strings and symbols.

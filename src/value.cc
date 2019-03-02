@@ -1,6 +1,7 @@
 // Primitive types
 enum Value_Type {
 	VALUE_INTEGER,
+	VALUE_STRING,
 	VALUE_REFERENCE,
 };
 
@@ -27,6 +28,11 @@ struct Obj_Tuple {
 	char * to_string();
 };
 
+/** Reference
+ * Represents a reference type in the language --- should be kept as
+ * tight as possible, because the size of this is passed around in
+ * every kind of value.
+ */
 struct Reference {
 	Obj_Type type;
 	void * ptr;
@@ -55,10 +61,16 @@ struct Reference {
 	}
 };
 
+/** Value
+ * Represents a pass-by-value value. This is *never* pointed to,
+ * always passed around by value.
+ */
 struct Value {
 	Value_Type type;
 	union {
 		int integer;
+		const char * string; // Strings are immutable, so they don't
+							 // need to be reference types
 		Reference reference;
 	};
 	static Value with_type(Value_Type type)
@@ -67,7 +79,21 @@ struct Value {
 	}
 	static Value make_integer(int integer)
 	{
-		return (Value) { VALUE_INTEGER, integer };
+		Value value = Value::with_type(VALUE_INTEGER);
+		value.integer = integer;
+		return value;
+	}
+	/** make_string_from_intern 
+	 * Constructs a string directly from the passed in const char
+	 * *. This should be an interned string that lasts the entire
+	 * lifetime of the VM, meaning either a symbol or a string
+	 * literal.
+	 */
+	static Value make_string_from_intern(const char * string)
+	{
+		Value value = Value::with_type(VALUE_STRING);
+		value.string = string; // @GC
+		return value;
 	}
 	char * to_string()
 	{
@@ -77,6 +103,9 @@ struct Value {
 			char * s = itoa(integer);
 			builder.append(s);
 			free(s);
+		} break;
+		case VALUE_STRING: {
+			builder.append(string);
 		} break;
 		case VALUE_REFERENCE: {
 			char * s = reference.to_string();

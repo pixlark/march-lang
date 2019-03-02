@@ -1,0 +1,27 @@
+Sample:
+
+// Declaration
+let x := 12;
+let x : int = 12;
+let t : tuple = (1, 2, 3);
+
+// Assignment
+x = 13;
+t = (x, 1);
+
+// Function declaration
+func f(x: int, t: tuple) : tuple
+{
+	return (x, t);
+}
+
+// Function declarations reduce to lambda assignment:
+
+// Lambda creation
+let f =
+	lambda { x: int, t: tuple } : tuple
+	{
+		return x + y;
+	};
+
+let g = (let f = 12);

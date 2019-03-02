@@ -1,3 +1,4 @@
 Instructions:
 
 MAKE_TUPLE (integer) :: Makes a new tuple with size
+BIND_SYMBOL (string) :: Binds the next pop to string

@@ -1,13 +1,22 @@
 enum Expr_Type {
+	EXPR_VARIABLE,
 	EXPR_INTEGER,
+	EXPR_STRING,
 	EXPR_TUPLE,
+	EXPR_LET,
 };
 
 struct Expr {
 	Expr_Type type;
 	union {
 		int integer;
+		const char * variable;
+		const char * string;
 		List<Expr*> tuple;
+		struct {
+			const char * symbol;
+			Expr * right;
+		} let;
 	};
 	static Expr * with_type(Expr_Type type)
 	{
@@ -34,9 +43,12 @@ struct Expr {
 			}
 			builder.append(")");
 		} break;
+		default:
+			fatal_internal("Switch in Expr::to_string() incomplete");
 		}
 		return builder.final_string();
 	}
+	void deep_free();
 };
 
 struct Parser {
@@ -50,7 +62,7 @@ struct Parser {
 	Token weak_expect(Token_Type type);
 	void advance();
 	bool match(Token_Type type);
-	Expr * parse_expression();
+	Expr * parse_expr();
 };
 
 Parser::Parser(Lexer * lexer)
@@ -110,13 +122,29 @@ bool Parser::match(Token_Type type)
 	return false;
 }
 
-Expr * Parser::parse_expression()
+Expr * Parser::parse_expr()
 {
-	if (is(TOKEN_INTEGER_LITERAL)) {
+	if (is(TOKEN_SYMBOL)) {
+		Expr * expr = Expr::with_type(EXPR_VARIABLE);
+		expr->variable = next().values.symbol;
+		return expr;
+	} else if (match(TOKEN_LET)) {
+		Expr * expr = Expr::with_type(EXPR_LET);
+		weak_expect(TOKEN_SYMBOL);
+		expr->let.symbol = next().values.symbol;
+		expect((Token_Type) ':');
+		expect((Token_Type) '=');
+		expr->let.right = parse_expr();
+		return expr;
+	} else if (is(TOKEN_INTEGER_LITERAL)) {
 		Expr * expr = Expr::with_type(EXPR_INTEGER);
 		Token tok = next();
 		expr->integer = tok.values.integer;
 		return expr;
+	} else if (is(TOKEN_STRING_LITERAL)) {
+		Expr * expr = Expr::with_type(EXPR_STRING);
+		Token tok = next();
+		expr->string = tok.values.string;
 	} else if (match((Token_Type) '(')) {
 		// Hack for empty tuple
 		if (match((Token_Type) ')')) {
@@ -125,7 +153,7 @@ Expr * Parser::parse_expression()
 			return expr;
 		}
 		// Lookahead and backtrack
-		Expr * left = parse_expression();
+		Expr * left = parse_expr();
 		if (match((Token_Type) ',')) {
 			// Tuple
 			Expr * expr = Expr::with_type(EXPR_TUPLE);
@@ -133,7 +161,7 @@ Expr * Parser::parse_expression()
 			expr->tuple.push(left);
 			while (true) {
 				if (match((Token_Type) ')')) break;
-				expr->tuple.push(parse_expression());
+				expr->tuple.push(parse_expr());
 				if (!match((Token_Type) ',')) {
 					expect((Token_Type) ')');
 					break;
@@ -141,12 +169,12 @@ Expr * Parser::parse_expression()
 			}
 			return expr;
 		} else {
-			// Just a parenthesized expression
+			// Just a parenthesized expr
 			expect((Token_Type) ')');
 			return left;
 		}
 	} else {
-		fatal("Unexpected %s", peek.to_string());
+		fatal("Unexpected %s in expression", peek.to_string());
 	}
 }
 

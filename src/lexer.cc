@@ -2,13 +2,14 @@ enum Token_Type {
 	TOKEN_EOF = 256,
 
 	// Reserved words
-	TOKEN_PLACEHOLDER,
+	TOKEN_LET,
 	
 	TOKEN_SYMBOL,
 	TOKEN_INTEGER_LITERAL,
+	TOKEN_STRING_LITERAL,
 };
 
-#define RESERVED_WORDS_BEGIN (TOKEN_PLACEHOLDER)
+#define RESERVED_WORDS_BEGIN (TOKEN_LET)
 #define RESERVED_WORDS_END   (TOKEN_SYMBOL)
 #define RESERVED_WORDS_COUNT (RESERVED_WORDS_END - RESERVED_WORDS_BEGIN)
 
@@ -16,7 +17,8 @@ struct Token {
 	Token_Type type;
 	union {
 		int integer;
-		char * symbol;
+		const char * symbol;
+		const char * string;
 	} values;
 	static Token eof()
 	{
@@ -42,12 +44,14 @@ char * Token::type_to_string(Token_Type type)
 	switch (type) {
 	case TOKEN_EOF:
 		return strdup("EOF");
-	case TOKEN_PLACEHOLDER:
-		return strdup("_");
+	case TOKEN_LET:
+		return strdup("let");
 	case TOKEN_SYMBOL:
 		return strdup("<symbol>");
 	case TOKEN_INTEGER_LITERAL:
 		return strdup("<integer>");
+	case TOKEN_STRING_LITERAL:
+		return strdup("<string>");
 	default:
 		fatal("Token::type_to_string() switch incomplete");
 	}
@@ -68,13 +72,20 @@ char * Token::to_string()
 	case TOKEN_INTEGER_LITERAL: {
 		return itoa(values.integer);
 	}
+	case TOKEN_STRING_LITERAL: {
+		String_Builder builder;
+		builder.append("string \"");
+		builder.append(values.string);
+		builder.append("\"");
+		return builder.final_string();
+	}
 	default:
 		return Token::type_to_string(type);
 	}
 }
 
 static const char * reserved_words[RESERVED_WORDS_COUNT] = {
-	"_",
+	"let",
 };
 
 struct Lexer {
@@ -128,7 +139,25 @@ Token Lexer::next_token()
 		goto reset;
 	}
 
+	if (peek() == '"') {
+		advance();
+		// TODO(pixlark): Buffer overflow
+		char buf[512];
+		size_t i = 0;
+		while (peek() != '"') {
+			buf[i++] = next();
+		}
+		buf[i++] = '\0';
+		advance();
+		
+		Token token;
+		token.type = TOKEN_STRING_LITERAL;
+		token.values.string = Intern::intern(buf);
+		return token;
+	}
+	
 	if (isalpha(peek()) || peek() == '_') {
+		// TODO(pixlark): Buffer overflow
 		char buf[512];
 		size_t i = 0;
 		while (isalnum(peek()) || peek() == '_') {
@@ -144,11 +173,12 @@ Token Lexer::next_token()
 		
 		Token token;
 		token.type = TOKEN_SYMBOL;
-		token.values.symbol = strdup(buf);
+		token.values.symbol = Intern::intern(buf);
 		return token;
 	}
 
 	if (isdigit(peek())) {
+		// TODO(pixlark): Buffer overflow
 		char buf[512];
 		size_t i = 0;
 		while (isdigit(peek())) {
@@ -165,6 +195,9 @@ Token Lexer::next_token()
 	case '(':
 	case ')':
 	case ',':
+	case ':':
+	case '=':
+	case ';':
 		return Token::with_type((Token_Type) next());
 		/*
 	case ';':
