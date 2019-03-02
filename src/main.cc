@@ -98,14 +98,17 @@ struct VM {
 		} break;
 		case INSTR_MAKE_TUPLE: {
 			assert(instr.argument.type == VALUE_INTEGER);
-			MTuple tuple;
-			tuple.length = instr.argument.integer;
-			tuple.elements = (Value*) malloc(sizeof(Value) * tuple.length);
-			for (int i = tuple.length - 1; i >= 0; i--) {
-				tuple.elements[i] = op_stack.pop();
+			assert(instr.argument.integer >= 0);
+			
+			Obj_Tuple * tuple = (Obj_Tuple*) malloc(sizeof(Obj_Tuple));
+			tuple->length = instr.argument.integer;
+			tuple->elements = (Value*) malloc(sizeof(Value) * tuple->length);
+			for (int i = tuple->length - 1; i >= 0; i--) {
+				tuple->elements[i] = op_stack.pop();
 			}
-			Value v = Value::with_type(VALUE_TUPLE);
-			v.tuple = tuple;
+			
+			Value v = Value::with_type(VALUE_REFERENCE);
+			v.reference = Reference::to(tuple, OBJ_TUPLE);
 			op_stack.push(v);
 		} break;
 		default:
