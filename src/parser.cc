@@ -49,6 +49,7 @@ struct Expr {
 
 enum Stmt_Type {
 	STMT_LET,
+	STMT_ASSIGN,
 	STMT_PRINT,
 	STMT_EXPR,
 };
@@ -58,9 +59,14 @@ struct Stmt {
 	union {
 		struct {
 			const char * symbol;
+			bool infer;
 			Type_Annotation annotation;
 			Expr * right;
 		} let;
+		struct {
+			Expr * left;
+			Expr * right;
+		} assign;
 		struct {
 			Expr * expr;
 		} print;
@@ -223,8 +229,10 @@ Stmt * Parser::parse_stmt()
 		weak_expect(TOKEN_SYMBOL);
 		stmt->let.symbol = next().values.symbol;
 		expect((Token_Type) ':');
+		stmt->let.infer = true;
 		if (is(TOKEN_SYMBOL)) {
 			stmt->let.annotation = Type_Annotation::make_from_symbol(next().values.symbol);
+			stmt->let.infer = false;
 		}
 		expect((Token_Type) '=');
 		stmt->let.right = parse_expr();
@@ -236,10 +244,19 @@ Stmt * Parser::parse_stmt()
 		expect((Token_Type) ';');
 		return stmt;
 	} else {
-		Stmt * stmt = Stmt::with_type(STMT_EXPR);
-		stmt->expr = parse_expr();
-		expect((Token_Type) ';');
-		return stmt;
+		Expr * left = parse_expr();
+		if (match((Token_Type) '=')) {
+			Stmt * stmt = Stmt::with_type(STMT_ASSIGN);
+			stmt->assign.left = left;
+			stmt->assign.right = parse_expr();
+			expect((Token_Type) ';');
+			return stmt;
+		} else {
+			Stmt * stmt = Stmt::with_type(STMT_EXPR);
+			stmt->expr = left;
+			expect((Token_Type) ';');
+			return stmt;
+		}
 	}
 }
 

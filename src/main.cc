@@ -30,6 +30,7 @@ enum Instr_Type {
 	INSTR_MAKE_TUPLE,
 	INSTR_BIND,
 	INSTR_VALIDATE_TYPE,
+	INSTR_UPDATE_BINDING,
 };
 
 struct Instr {
@@ -105,9 +106,23 @@ struct Compiler {
 		switch (stmt->type) {
 		case STMT_LET: {
 			compile_expr(stmt->let.right);
-			source.push(Instr::with_type_and_type_arg(INSTR_VALIDATE_TYPE, stmt->let.annotation));
+			if (!stmt->let.infer) {
+				source.push(Instr::with_type_and_type_arg(INSTR_VALIDATE_TYPE, stmt->let.annotation));
+			}
 			source.push(Instr::with_type_and_arg(INSTR_BIND,
 												 Value::make_string_from_intern(stmt->let.symbol)));
+		} break;
+		case STMT_ASSIGN: {
+			// Only specific expressions are valid l-expressions
+			if (stmt->assign.left->type == EXPR_VARIABLE) {
+				// Variable assignment
+				const char * symbol = stmt->assign.left->variable;
+				compile_expr(stmt->assign.right);
+				source.push(Instr::with_type_and_arg(INSTR_UPDATE_BINDING,
+													 Value::make_string_from_intern(symbol)));
+			} else {
+				fatal("Invalid l-expression");
+			}
 		} break;
 		case STMT_PRINT: {
 			compile_expr(stmt->print.expr);
@@ -218,6 +233,23 @@ struct VM {
 				fatal("Mismatch between expected and provided type");
 			}
 		} break;
+		case INSTR_UPDATE_BINDING: {
+			assert(instr.argument.type == VALUE_STRING);
+			const char * symbol = instr.argument.string;
+			
+			int index = global_table.find(symbol);
+			if (index == -1) {
+				fatal("Tried to modify nonexistent variable %s", symbol);
+			}
+			
+			Type_Annotation expected = global_table.values[index].get_annotation();
+			Value new_value = op_stack.pop();
+			if (!new_value.validate_type(expected)) {
+				fatal("Mismatch between expected and provided type");
+			}
+			
+			global_table.set(symbol, new_value);
+		} break;
 		default:
 			fatal_internal("Incomplete switch in VM::step()");
 			break;
@@ -275,6 +307,7 @@ int main(int argc, char ** argv)
 		free(stmt);
 
 		// Run garbage collector
+		Collection::unmark_all();
 		vm.mark_all_bound_values();
 		size_t allocations_before = Collection::ptrs.size;
 		Collection::collect_unmarked();

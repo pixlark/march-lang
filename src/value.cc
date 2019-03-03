@@ -155,6 +155,18 @@ struct Value {
 	}
 	void mark_for_gc();
 	char * to_string();
+	Type_Annotation get_annotation()
+	{
+		Type_Annotation annot;
+		annot.val_type = type;
+		if (type == VALUE_REFERENCE) {
+			annot.obj_type = reference.type;
+			if (reference.type == OBJ_INSTANCE) {
+				fatal("Unimplemented");
+			}
+		}
+		return annot;
+	}
 	bool validate_type(Type_Annotation expected)
 	{
 		if (type != VALUE_REFERENCE) {

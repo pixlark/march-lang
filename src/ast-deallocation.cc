@@ -29,6 +29,12 @@ void Stmt::deep_free()
 		let.right->deep_free();
 		free(let.right);
 	} break;
+	case STMT_ASSIGN: {
+		assign.left->deep_free();
+		free(assign.left);
+		assign.right->deep_free();
+		free(assign.right);
+	} break;
 	case STMT_PRINT: {
 		print.expr->deep_free();
 		free(print.expr);
