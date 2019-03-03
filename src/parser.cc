@@ -1,4 +1,5 @@
 enum Expr_Type {
+	EXPR_TYPEOF,
 	EXPR_VARIABLE,
 	EXPR_INTEGER,
 	EXPR_STRING,
@@ -17,6 +18,9 @@ struct Expr {
 			List<const char *> symbols;
 			List<Expr*> annotations;
 		} product;
+		struct {
+			Expr * expr;
+		} type_of;
 	};
 	static Expr * with_type(Expr_Type type)
 	{
@@ -219,6 +223,11 @@ Expr * Parser::parse_tuple()
 
 Expr * Parser::parse_structured()
 {
+	if (match(TOKEN_TYPEOF)) {
+		Expr * expr = Expr::with_type(EXPR_TYPEOF);
+		expr->type_of.expr = parse_expr();
+		return expr;
+	}
 	/*
 	if (match(TOKEN_PRODUCT)) {
 		expect((Token_Type) '{');

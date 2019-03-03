@@ -17,6 +17,10 @@ void Expr::deep_free()
 		}
 		tuple.dealloc();
 	} break;
+	case EXPR_TYPEOF: {
+		type_of.expr->deep_free();
+		free(type_of.expr);
+	} break;
 	default:
 		fatal("Switch in Expr::deep_free() incomplete");
 	}

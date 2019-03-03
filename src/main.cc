@@ -31,6 +31,7 @@ enum Instr_Type {
 	INSTR_BIND,
 	INSTR_VALIDATE_TYPE,
 	INSTR_UPDATE_BINDING,
+	INSTR_TYPEOF,
 };
 
 struct Instr {
@@ -62,6 +63,10 @@ struct Compiler {
 	void compile_expr(Expr * expr)
 	{
 		switch (expr->type) {
+		case EXPR_TYPEOF: {
+			compile_expr(expr->type_of.expr);
+			source.push(Instr::with_type(INSTR_TYPEOF));
+		} break;
 		case EXPR_VARIABLE: {
 			source.push(Instr::with_type_and_arg(INSTR_PUSH,
 												 Value::make_string_from_intern(expr->variable)));
@@ -252,6 +257,12 @@ struct VM {
 			}
 			
 			global_table.set(symbol, new_value);
+		} break;
+		case INSTR_TYPEOF: {
+			Value v = op_stack.pop();
+			Value type = Value::with_type(VALUE_TYPE);
+			type.annotation = v.get_annotation();
+			op_stack.push(type);
 		} break;
 		default:
 			fatal_internal("Incomplete switch in VM::step()");

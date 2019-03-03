@@ -5,6 +5,7 @@ enum Token_Type {
 	TOKEN_LET,
 	TOKEN_SET,
 	TOKEN_PRINT,
+	TOKEN_TYPEOF,
 	TOKEN_PRODUCT,
 	
 	TOKEN_SYMBOL,
@@ -17,7 +18,7 @@ enum Token_Type {
 #define RESERVED_WORDS_COUNT (RESERVED_WORDS_END - RESERVED_WORDS_BEGIN)
 
 static const char * reserved_words[RESERVED_WORDS_COUNT] = {
-	"let", "set", "print", "product"
+	"let", "set", "print", "typeof", "product",
 };
 
 struct Token {
