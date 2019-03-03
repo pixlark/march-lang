@@ -7,6 +7,7 @@
 enum Value_Type {
 	VALUE_INTEGER,
 	VALUE_STRING,
+	VALUE_TYPE,
 	VALUE_REFERENCE,
 	VALUE_PRIMITIVE_COUNT = VALUE_REFERENCE,
 };
@@ -28,33 +29,6 @@ const char * obj_type_to_string(Obj_Type type)
 	}
 }
 
-/** Type_Info
- * This whole process feels kind of ugly. I'm not sure I like it, but
- * at the same time, what can ya do?
- */
-namespace Type_Info {
-	static const char ** primitive_types;
-	static const char ** reference_types;
-	void init()
-	{
-		static const char * primitive_type_strings[VALUE_PRIMITIVE_COUNT] = {
-			"int", "string",
-		};
-		primitive_types = (const char **) malloc(sizeof(const char *) * VALUE_PRIMITIVE_COUNT);
-		for (int i = 0; i < VALUE_PRIMITIVE_COUNT; i++) {
-			primitive_types[i] = Intern::intern(primitive_type_strings[i]);
-		}
-		
-		static const char * reference_type_strings[OBJ_BUILTIN_COUNT] = {
-			"tuple",
-		};
-		reference_types = (const char **) malloc(sizeof(const char *) * OBJ_BUILTIN_COUNT);
-		for (int i = 0; i < OBJ_BUILTIN_COUNT; i++) {
-			reference_types[i] = Intern::intern(reference_type_strings[i]);
-		}
-	}
-};
-
 /** Type_Annotation
  * This works as a cascade. If the val_type is anything but
  * VALUE_REFERENCE, the other two fields mean nothing. Otherwise, we
@@ -66,28 +40,40 @@ struct Type_Annotation {
 	Value_Type val_type;
 	Obj_Type obj_type;
 	const char * class_name;
-	static Type_Annotation make_from_symbol(const char * symbol)
+	static Type_Annotation make_primitive(Value_Type val_type)
 	{
-		Type_Annotation annotation;
-		// Check for primitive type
-		for (int i = 0; i < VALUE_PRIMITIVE_COUNT; i++) {
-			if (symbol == Type_Info::primitive_types[i]) {
-				annotation.val_type = (Value_Type) i;
-				return annotation;
-			}
+		return (Type_Annotation) { val_type };
+	}
+	static Type_Annotation make_reference(Obj_Type obj_type)
+	{
+		return (Type_Annotation) { VALUE_REFERENCE, obj_type };
+	}
+	static Type_Annotation make_instance(const char * class_name)
+	{
+		return (Type_Annotation) { VALUE_REFERENCE, OBJ_INSTANCE, class_name };
+	}
+	char * to_string()
+	{
+		String_Builder builder;
+		builder.append("<type: ");
+		switch (val_type) {
+		case VALUE_INTEGER:
+			builder.append("int");
+			break;
+		case VALUE_STRING:
+			builder.append("string");
+			break;
+		case VALUE_TYPE:
+			builder.append("type");
+			break;
+		case VALUE_REFERENCE:
+			builder.append(obj_type_to_string(obj_type));
+			break;
+		default:
+			fatal("Incomplete switch in Type_Annotation::to_string()");
 		}
-		// Check for builtin reference type
-		annotation.val_type = VALUE_REFERENCE;
-		for (int i = 0; i < OBJ_BUILTIN_COUNT; i++) {
-			if (symbol == Type_Info::reference_types[i]) {
-				annotation.obj_type = (Obj_Type) i;
-				return annotation;
-			}
-		}
-		// Must be a class instance
-		annotation.obj_type = OBJ_INSTANCE;
-		annotation.class_name = symbol;
-		return annotation;
+		builder.append(">");
+		return builder.final_string();
 	}
 };
 
@@ -130,6 +116,7 @@ struct Value {
 		const char * string; // Strings are immutable, so they don't
 							 // need to be reference types
 		Reference reference;
+		Type_Annotation annotation;
 	};
 	static Value with_type(Value_Type type)
 	{
@@ -206,7 +193,8 @@ void Value::mark_for_gc()
 	}
 }
 
-char * Value::to_string() {
+char * Value::to_string()
+{
 	String_Builder builder;
 	switch (type) {
 	case VALUE_INTEGER: {
@@ -216,6 +204,9 @@ char * Value::to_string() {
 	} break;
 	case VALUE_STRING: {
 		builder.append(string);
+	} break;
+	case VALUE_TYPE: {
+		builder.append(annotation.to_string());
 	} break;
 	case VALUE_REFERENCE: {
 		char * s = reference.to_string();

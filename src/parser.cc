@@ -3,7 +3,7 @@ enum Expr_Type {
 	EXPR_INTEGER,
 	EXPR_STRING,
 	EXPR_TUPLE,
-	EXPR_SET,
+	EXPR_PRODUCT,
 };
 
 struct Expr {
@@ -13,6 +13,10 @@ struct Expr {
 		const char * variable;
 		const char * string;
 		List<Expr*> tuple;
+		struct {
+			List<const char *> symbols;
+			List<Expr*> annotations;
+		} product;
 	};
 	static Expr * with_type(Expr_Type type)
 	{
@@ -60,7 +64,7 @@ struct Stmt {
 		struct {
 			const char * symbol;
 			bool infer;
-			Type_Annotation annotation;
+			Expr * annotation;
 			Expr * right;
 		} let;
 		struct {
@@ -95,6 +99,7 @@ struct Parser {
 	Expr * parse_atom();
 	Expr * parse_tuple();
 	Expr * parse_structured();
+	Expr * parse_type();
 	Expr * parse_expr();
 	Stmt * parse_stmt();
 };
@@ -214,6 +219,26 @@ Expr * Parser::parse_tuple()
 
 Expr * Parser::parse_structured()
 {
+	/*
+	if (match(TOKEN_PRODUCT)) {
+		expect((Token_Type) '{');
+		Expr * expr = Expr::with_type(EXPR_PRODUCT);
+		expr->product.symbols.alloc();
+		expr->product.annotations.alloc();
+		while (true) {
+			if (match((Token_Type) '}')) break;
+			weak_expect(TOKEN_SYMBOL);
+			expr->product.symbols.push(next().values.symbol);
+			expect((Token_Type) ':');
+			weak_expect(TOKEN_SYMBOL);
+			expr->product.annotations.push(parse_type());
+			if (!match((Token_Type) ',')) {
+				expect((Token_Type) '}');
+				break;
+			}
+		}
+		return expr;
+		}*/
 	return parse_tuple();
 }
 
@@ -230,8 +255,8 @@ Stmt * Parser::parse_stmt()
 		stmt->let.symbol = next().values.symbol;
 		expect((Token_Type) ':');
 		stmt->let.infer = true;
-		if (is(TOKEN_SYMBOL)) {
-			stmt->let.annotation = Type_Annotation::make_from_symbol(next().values.symbol);
+		if (!is((Token_Type) '=')) {
+			stmt->let.annotation = parse_expr();
 			stmt->let.infer = false;
 		}
 		expect((Token_Type) '=');

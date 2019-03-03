@@ -25,3 +25,23 @@ let f :=
 	};
 
 let g = (let f = 12);
+
+// Type declaration
+
+class My_Class {
+	x: int, y: int, z: int
+}
+
+// Reduces to
+
+let My_Class := prod { x: int, y: int, z: int };
+
+// Union declaration
+
+union My_Union {
+	Some: int, None: none
+}
+
+// Reduces to
+
+let My_Union := sum { Some: int, None: none };

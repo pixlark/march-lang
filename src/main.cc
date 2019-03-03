@@ -37,12 +37,6 @@ struct Instr {
 	Instr_Type type;
 	union {
 		Value argument;
-		Type_Annotation type_argument; // This is a natural
-									   // consequence of not having
-									   // first-class
-									   // types... annoying, but
-									   // unavoidable unless we want
-									   // to get into that mess.
 	};
 	static Instr with_type(Instr_Type type)
 	{
@@ -52,14 +46,6 @@ struct Instr {
 								   Value argument)
 	{
 		return (Instr) { type, argument };
-	}
-	static Instr with_type_and_type_arg(Instr_Type type,
-										Type_Annotation type_argument)
-	{
-		Instr instr;
-		instr.type = type;
-		instr.type_argument = type_argument;
-		return instr;
 	}
 };
 
@@ -107,7 +93,8 @@ struct Compiler {
 		case STMT_LET: {
 			compile_expr(stmt->let.right);
 			if (!stmt->let.infer) {
-				source.push(Instr::with_type_and_type_arg(INSTR_VALIDATE_TYPE, stmt->let.annotation));
+				compile_expr(stmt->let.annotation);
+				source.push(Instr::with_type(INSTR_VALIDATE_TYPE));
 			}
 			source.push(Instr::with_type_and_arg(INSTR_BIND,
 												 Value::make_string_from_intern(stmt->let.symbol)));
@@ -147,6 +134,20 @@ struct VM {
 
 	Symbol_Table global_table;
 	List<Value> op_stack;
+	void insert_builtin_bindings()
+	{
+		Value _int = Value::with_type(VALUE_TYPE);
+		_int.annotation = Type_Annotation::make_primitive(VALUE_INTEGER);
+		global_table.set(Intern::intern("int"), _int);
+		
+		Value _string = Value::with_type(VALUE_TYPE);
+		_string.annotation = Type_Annotation::make_primitive(VALUE_STRING);
+		global_table.set(Intern::intern("string"), _string);
+
+		Value _tuple = Value::with_type(VALUE_TYPE);
+		_tuple.annotation = Type_Annotation::make_reference(OBJ_TUPLE);
+		global_table.set(Intern::intern("tuple"), _tuple);
+	}
 	static VM create()
 	{
 		VM vm;
@@ -155,6 +156,7 @@ struct VM {
 		vm.program_counter = 0;
 		vm.halted = true;
 		vm.global_table.alloc();
+		vm.insert_builtin_bindings();
 		vm.op_stack.alloc();
 		return vm;
 	}
@@ -228,8 +230,9 @@ struct VM {
 			global_table.set(symbol, to_bind);
 		} break;
 		case INSTR_VALIDATE_TYPE: {
-			Value v = op_stack[op_stack.size - 1];
-			if (!v.validate_type(instr.type_argument)) {
+			Value type = op_stack.pop();
+			assert(type.type == VALUE_TYPE);
+			if (!op_stack[op_stack.size - 1].validate_type(type.annotation)) {
 				fatal("Mismatch between expected and provided type");
 			}
 		} break;
@@ -278,7 +281,6 @@ int main(int argc, char ** argv)
 	
 	Intern::init();
 	Collection::init();
-	Type_Info::init();
 	Lexer lexer(source);
 	Parser parser(&lexer);
 	VM vm = VM::create();
