@@ -33,6 +33,10 @@ void Stmt::deep_free()
 		print.expr->deep_free();
 		free(print.expr);
 	} break;
+	case STMT_EXPR: {
+		expr->deep_free();
+		free(expr);
+	} break;
 	default:
 		fatal("Switch in Stmt::deep_free() incomplete");
 	}

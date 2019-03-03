@@ -23,6 +23,7 @@
 #include "symbol-table.cc"
 
 enum Instr_Type {
+	INSTR_POP_AND_DISCARD,
 	INSTR_POP_AND_OUTPUT,
 	INSTR_POP_AND_LOOKUP,
 	INSTR_PUSH,
@@ -94,6 +95,10 @@ struct Compiler {
 			compile_expr(stmt->print.expr);
 			source.push(Instr::with_type(INSTR_POP_AND_OUTPUT));
 		} break;
+		case STMT_EXPR: {
+			compile_expr(stmt->expr);
+			source.push(Instr::with_type(INSTR_POP_AND_DISCARD));
+		} break;
 		default:
 			fatal_internal("Switch in Compiler::compile_stmt() incomplete");
 			break;
@@ -142,6 +147,9 @@ struct VM {
 		}
 		Instr instr = program[program_counter++];
 		switch (instr.type) {
+		case INSTR_POP_AND_DISCARD: {
+			op_stack.pop();
+		} break;
 		case INSTR_POP_AND_OUTPUT: {
 			Value v = op_stack.pop();
 			char * s = v.to_string();
@@ -214,8 +222,8 @@ int main(int argc, char ** argv)
 
 	Intern::init();
 	Collection::init();
-	Lexer    lexer(source);
-	Parser   parser(&lexer);
+	Lexer lexer(source);
+	Parser parser(&lexer);
 	VM vm = VM::create();
 	
 	while (!parser.at_end()) {
@@ -233,6 +241,9 @@ int main(int argc, char ** argv)
 			vm.step();
 		}
 
+		// Make sure we've progressed correctly
+		assert(vm.op_stack.size == 0);
+		
 		// Free some stuff
 		compiler.dealloc();
 		stmt->deep_free();
@@ -248,7 +259,7 @@ int main(int argc, char ** argv)
 	}
 
 	vm.destroy();
-	free((void*) source);
 	Collection::destroy_everything();
 	Intern::destroy_everything();
+	free((void*) source);
 }

@@ -1,2 +1,4 @@
+12;
 let x := (15, 12);
-print x;
+let y := (x, x, x);
+print y;

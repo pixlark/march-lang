@@ -50,6 +50,7 @@ struct Expr {
 enum Stmt_Type {
 	STMT_LET,
 	STMT_PRINT,
+	STMT_EXPR,
 };
 
 struct Stmt {
@@ -62,6 +63,7 @@ struct Stmt {
 		struct {
 			Expr * expr;
 		} print;
+		Expr * expr;
 	};
 	static Stmt * with_type(Stmt_Type type)
 	{
@@ -247,8 +249,11 @@ Stmt * Parser::parse_stmt()
 		stmt->print.expr = parse_expr();
 		expect((Token_Type) ';');
 		return stmt;
-	} else{
-		fatal("Unimplemented");
+	} else {
+		Stmt * stmt = Stmt::with_type(STMT_EXPR);
+		stmt->expr = parse_expr();
+		expect((Token_Type) ';');
+		return stmt;
 	}
 }
 
