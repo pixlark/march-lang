@@ -58,6 +58,7 @@ struct Stmt {
 	union {
 		struct {
 			const char * symbol;
+			Type_Annotation annotation;
 			Expr * right;
 		} let;
 		struct {
@@ -208,24 +209,6 @@ Expr * Parser::parse_tuple()
 Expr * Parser::parse_structured()
 {
 	return parse_tuple();
-	/*
-	if (match(TOKEN_LET)) {
-		Expr * expr = Expr::with_type(EXPR_LET);
-		weak_expect(TOKEN_SYMBOL);
-		expr->let.symbol = next().values.symbol;
-		expect((Token_Type) ':');
-		expect((Token_Type) '=');
-		expr->let.right = parse_expr();
-		return expr;
- 	} else if (match(TOKEN_SET)) {
-		Expr * expr = Expr::with_type(EXPR_SET);
-		expr->set.left = parse_expr();
-		expect((Token_Type) '=');
-		expr->set.right = parse_expr();
-		return expr;
-	} else {
-		return parse_tuple();
-		}*/
 }
 
 Expr * Parser::parse_expr()
@@ -240,6 +223,9 @@ Stmt * Parser::parse_stmt()
 		weak_expect(TOKEN_SYMBOL);
 		stmt->let.symbol = next().values.symbol;
 		expect((Token_Type) ':');
+		if (is(TOKEN_SYMBOL)) {
+			stmt->let.annotation = Type_Annotation::make_from_symbol(next().values.symbol);
+		}
 		expect((Token_Type) '=');
 		stmt->let.right = parse_expr();
 		expect((Token_Type) ';');

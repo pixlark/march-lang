@@ -1,4 +1,2 @@
-12;
-let x := (15, 12);
-let y := (x, x, x);
-print y;
+let x : Structure = (1, 2, 3);
+print x;

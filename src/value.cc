@@ -8,11 +8,14 @@ enum Value_Type {
 	VALUE_INTEGER,
 	VALUE_STRING,
 	VALUE_REFERENCE,
+	VALUE_PRIMITIVE_COUNT = VALUE_REFERENCE,
 };
 
 // Reference types
 enum Obj_Type {
 	OBJ_TUPLE,
+	OBJ_INSTANCE,
+	OBJ_BUILTIN_COUNT = OBJ_INSTANCE,
 };
 
 const char * obj_type_to_string(Obj_Type type)
@@ -24,6 +27,69 @@ const char * obj_type_to_string(Obj_Type type)
 		fatal_internal("switch in obj_type_to_string() incomplete");
 	}
 }
+
+/** Type_Info
+ * This whole process feels kind of ugly. I'm not sure I like it, but
+ * at the same time, what can ya do?
+ */
+namespace Type_Info {
+	static const char ** primitive_types;
+	static const char ** reference_types;
+	void init()
+	{
+		static const char * primitive_type_strings[VALUE_PRIMITIVE_COUNT] = {
+			"int", "string",
+		};
+		primitive_types = (const char **) malloc(sizeof(const char *) * VALUE_PRIMITIVE_COUNT);
+		for (int i = 0; i < VALUE_PRIMITIVE_COUNT; i++) {
+			primitive_types[i] = Intern::intern(primitive_type_strings[i]);
+		}
+		
+		static const char * reference_type_strings[OBJ_BUILTIN_COUNT] = {
+			"tuple",
+		};
+		reference_types = (const char **) malloc(sizeof(const char *) * OBJ_BUILTIN_COUNT);
+		for (int i = 0; i < OBJ_BUILTIN_COUNT; i++) {
+			reference_types[i] = Intern::intern(reference_type_strings[i]);
+		}
+	}
+};
+
+/** Type_Annotation
+ * This works as a cascade. If the val_type is anything but
+ * VALUE_REFERENCE, the other two fields mean nothing. Otherwise, we
+ * check obj_type. If that's anything but OBJ_INSTANCE, then
+ * class_name means nothing. Otherwise, we have a reference to a class
+ * instance with name class_name.
+ */
+struct Type_Annotation {
+	Value_Type val_type;
+	Obj_Type obj_type;
+	const char * class_name;
+	static Type_Annotation make_from_symbol(const char * symbol)
+	{
+		Type_Annotation annotation;
+		// Check for primitive type
+		for (int i = 0; i < VALUE_PRIMITIVE_COUNT; i++) {
+			if (symbol == Type_Info::primitive_types[i]) {
+				annotation.val_type = (Value_Type) i;
+				return annotation;
+			}
+		}
+		// Check for builtin reference type
+		annotation.val_type = VALUE_REFERENCE;
+		for (int i = 0; i < OBJ_BUILTIN_COUNT; i++) {
+			if (symbol == Type_Info::reference_types[i]) {
+				annotation.obj_type = (Obj_Type) i;
+				return annotation;
+			}
+		}
+		// Must be a class instance
+		annotation.obj_type = OBJ_INSTANCE;
+		annotation.class_name = symbol;
+		return annotation;
+	}
+};
 
 /** Reference
  * Represents a reference type in the language --- should be kept as
@@ -38,6 +104,18 @@ struct Reference {
 	static Reference to(void * ptr, Obj_Type type)
 	{
 		return (Reference) { type, ptr };
+	}
+	bool validate_type(Type_Annotation expected)
+	{
+		if (type != OBJ_INSTANCE) {
+			return type == expected.obj_type;
+		} else {
+			if (expected.obj_type != OBJ_INSTANCE) {
+				return false;
+			} else {
+				assert(false && "This is impossible. Literally.");
+			}
+		}
 	}
 };
 
@@ -77,6 +155,18 @@ struct Value {
 	}
 	void mark_for_gc();
 	char * to_string();
+	bool validate_type(Type_Annotation expected)
+	{
+		if (type != VALUE_REFERENCE) {
+			return type == expected.val_type;
+		} else {
+			if (expected.val_type != VALUE_REFERENCE) {
+				return false;
+			} else {
+				return reference.validate_type(expected);
+			}
+		}
+	}
 };
 
 /*

@@ -16,10 +16,10 @@
 #include "string-builder.cc"
 #include "intern.cc"
 #include "lexer.cc"
-#include "parser.cc"
-#include "ast-deallocation.cc"
 #include "collection.cc"
 #include "value.cc"
+#include "parser.cc"
+#include "ast-deallocation.cc"
 #include "symbol-table.cc"
 
 enum Instr_Type {
@@ -29,11 +29,20 @@ enum Instr_Type {
 	INSTR_PUSH,
 	INSTR_MAKE_TUPLE,
 	INSTR_BIND,
+	INSTR_VALIDATE_TYPE,
 };
 
 struct Instr {
 	Instr_Type type;
-	Value argument;
+	union {
+		Value argument;
+		Type_Annotation type_argument; // This is a natural
+									   // consequence of not having
+									   // first-class
+									   // types... annoying, but
+									   // unavoidable unless we want
+									   // to get into that mess.
+	};
 	static Instr with_type(Instr_Type type)
 	{
 		return (Instr) { type };
@@ -42,6 +51,14 @@ struct Instr {
 								   Value argument)
 	{
 		return (Instr) { type, argument };
+	}
+	static Instr with_type_and_type_arg(Instr_Type type,
+										Type_Annotation type_argument)
+	{
+		Instr instr;
+		instr.type = type;
+		instr.type_argument = type_argument;
+		return instr;
 	}
 };
 
@@ -88,6 +105,7 @@ struct Compiler {
 		switch (stmt->type) {
 		case STMT_LET: {
 			compile_expr(stmt->let.right);
+			source.push(Instr::with_type_and_type_arg(INSTR_VALIDATE_TYPE, stmt->let.annotation));
 			source.push(Instr::with_type_and_arg(INSTR_BIND,
 												 Value::make_string_from_intern(stmt->let.symbol)));
 		} break;
@@ -194,6 +212,12 @@ struct VM {
 			Value to_bind = op_stack.pop();
 			global_table.set(symbol, to_bind);
 		} break;
+		case INSTR_VALIDATE_TYPE: {
+			Value v = op_stack[op_stack.size - 1];
+			if (!v.validate_type(instr.type_argument)) {
+				fatal("Mismatch between expected and provided type");
+			}
+		} break;
 		default:
 			fatal_internal("Incomplete switch in VM::step()");
 			break;
@@ -219,9 +243,10 @@ int main(int argc, char ** argv)
 		printf("File does not exist.\n");
 		return 1;
 	}
-
+	
 	Intern::init();
 	Collection::init();
+	Type_Info::init();
 	Lexer lexer(source);
 	Parser parser(&lexer);
 	VM vm = VM::create();
@@ -241,7 +266,7 @@ int main(int argc, char ** argv)
 			vm.step();
 		}
 
-		// Make sure we've progressed correctly
+		// Make sure we haven't reached an invalid state
 		assert(vm.op_stack.size == 0);
 		
 		// Free some stuff
