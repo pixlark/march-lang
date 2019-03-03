@@ -17,11 +17,23 @@ void Expr::deep_free()
 		}
 		tuple.dealloc();
 	} break;
-	case EXPR_LET: {
+	default:
+		fatal("Switch in Expr::deep_free() incomplete");
+	}
+}
+
+void Stmt::deep_free()
+{
+	switch (type) {
+	case STMT_LET: {
 		let.right->deep_free();
 		free(let.right);
 	} break;
+	case STMT_PRINT: {
+		print.expr->deep_free();
+		free(print.expr);
+	} break;
 	default:
-		fatal("Switch in Expr::deep_free() incomplete");
+		fatal("Switch in Stmt::deep_free() incomplete");
 	}
 }

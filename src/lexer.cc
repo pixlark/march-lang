@@ -3,6 +3,8 @@ enum Token_Type {
 
 	// Reserved words
 	TOKEN_LET,
+	TOKEN_SET,
+	TOKEN_PRINT,
 	
 	TOKEN_SYMBOL,
 	TOKEN_INTEGER_LITERAL,
@@ -12,6 +14,10 @@ enum Token_Type {
 #define RESERVED_WORDS_BEGIN (TOKEN_LET)
 #define RESERVED_WORDS_END   (TOKEN_SYMBOL)
 #define RESERVED_WORDS_COUNT (RESERVED_WORDS_END - RESERVED_WORDS_BEGIN)
+
+static const char * reserved_words[RESERVED_WORDS_COUNT] = {
+	"let", "set", "print",
+};
 
 struct Token {
 	Token_Type type;
@@ -41,11 +47,14 @@ char * Token::type_to_string(Token_Type type)
 	if (type < 256) {
 		return Token::with_type(type).to_string();
 	}
+	
+	if (type >= RESERVED_WORDS_BEGIN && type < RESERVED_WORDS_END) {
+		return strdup(reserved_words[type - RESERVED_WORDS_BEGIN]);
+	}
+	
 	switch (type) {
 	case TOKEN_EOF:
 		return strdup("EOF");
-	case TOKEN_LET:
-		return strdup("let");
 	case TOKEN_SYMBOL:
 		return strdup("<symbol>");
 	case TOKEN_INTEGER_LITERAL:
@@ -83,10 +92,6 @@ char * Token::to_string()
 		return Token::type_to_string(type);
 	}
 }
-
-static const char * reserved_words[RESERVED_WORDS_COUNT] = {
-	"let",
-};
 
 struct Lexer {
 	const char * source;

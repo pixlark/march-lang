@@ -3,7 +3,7 @@ enum Expr_Type {
 	EXPR_INTEGER,
 	EXPR_STRING,
 	EXPR_TUPLE,
-	EXPR_LET,
+	EXPR_SET,
 };
 
 struct Expr {
@@ -13,10 +13,6 @@ struct Expr {
 		const char * variable;
 		const char * string;
 		List<Expr*> tuple;
-		struct {
-			const char * symbol;
-			Expr * right;
-		} let;
 	};
 	static Expr * with_type(Expr_Type type)
 	{
@@ -51,6 +47,31 @@ struct Expr {
 	void deep_free();
 };
 
+enum Stmt_Type {
+	STMT_LET,
+	STMT_PRINT,
+};
+
+struct Stmt {
+	Stmt_Type type;
+	union {
+		struct {
+			const char * symbol;
+			Expr * right;
+		} let;
+		struct {
+			Expr * expr;
+		} print;
+	};
+	static Stmt * with_type(Stmt_Type type)
+	{
+		Stmt * stmt = (Stmt*) malloc(sizeof(Stmt));
+		stmt->type = type;
+		return stmt;
+	}
+	void deep_free();
+};
+
 struct Parser {
 	Lexer * lexer;
 	Token peek;
@@ -62,7 +83,11 @@ struct Parser {
 	Token weak_expect(Token_Type type);
 	void advance();
 	bool match(Token_Type type);
+	Expr * parse_atom();
+	Expr * parse_tuple();
+	Expr * parse_structured();
 	Expr * parse_expr();
+	Stmt * parse_stmt();
 };
 
 Parser::Parser(Lexer * lexer)
@@ -122,19 +147,12 @@ bool Parser::match(Token_Type type)
 	return false;
 }
 
-Expr * Parser::parse_expr()
+// The tightest unit of expression --- things like literals and variables
+Expr * Parser::parse_atom()
 {
 	if (is(TOKEN_SYMBOL)) {
 		Expr * expr = Expr::with_type(EXPR_VARIABLE);
 		expr->variable = next().values.symbol;
-		return expr;
-	} else if (match(TOKEN_LET)) {
-		Expr * expr = Expr::with_type(EXPR_LET);
-		weak_expect(TOKEN_SYMBOL);
-		expr->let.symbol = next().values.symbol;
-		expect((Token_Type) ':');
-		expect((Token_Type) '=');
-		expr->let.right = parse_expr();
 		return expr;
 	} else if (is(TOKEN_INTEGER_LITERAL)) {
 		Expr * expr = Expr::with_type(EXPR_INTEGER);
@@ -145,7 +163,14 @@ Expr * Parser::parse_expr()
 		Expr * expr = Expr::with_type(EXPR_STRING);
 		Token tok = next();
 		expr->string = tok.values.string;
-	} else if (match((Token_Type) '(')) {
+	} else {
+		fatal("Unexpected %s in expression", peek.to_string());
+	}
+}
+
+Expr * Parser::parse_tuple()
+{
+	if (match((Token_Type) '(')) {
 		// Hack for empty tuple
 		if (match((Token_Type) ')')) {
 			Expr * expr = Expr::with_type(EXPR_TUPLE);
@@ -174,7 +199,56 @@ Expr * Parser::parse_expr()
 			return left;
 		}
 	} else {
-		fatal("Unexpected %s in expression", peek.to_string());
+		return parse_atom();
+	}
+}
+
+Expr * Parser::parse_structured()
+{
+	return parse_tuple();
+	/*
+	if (match(TOKEN_LET)) {
+		Expr * expr = Expr::with_type(EXPR_LET);
+		weak_expect(TOKEN_SYMBOL);
+		expr->let.symbol = next().values.symbol;
+		expect((Token_Type) ':');
+		expect((Token_Type) '=');
+		expr->let.right = parse_expr();
+		return expr;
+ 	} else if (match(TOKEN_SET)) {
+		Expr * expr = Expr::with_type(EXPR_SET);
+		expr->set.left = parse_expr();
+		expect((Token_Type) '=');
+		expr->set.right = parse_expr();
+		return expr;
+	} else {
+		return parse_tuple();
+		}*/
+}
+
+Expr * Parser::parse_expr()
+{
+	return parse_structured();
+}
+
+Stmt * Parser::parse_stmt()
+{
+	if (match(TOKEN_LET)) {
+		Stmt * stmt = Stmt::with_type(STMT_LET);
+		weak_expect(TOKEN_SYMBOL);
+		stmt->let.symbol = next().values.symbol;
+		expect((Token_Type) ':');
+		expect((Token_Type) '=');
+		stmt->let.right = parse_expr();
+		expect((Token_Type) ';');
+		return stmt;
+	} else if (match(TOKEN_PRINT)) {
+		Stmt * stmt = Stmt::with_type(STMT_PRINT);
+		stmt->print.expr = parse_expr();
+		expect((Token_Type) ';');
+		return stmt;
+	} else{
+		fatal("Unimplemented");
 	}
 }
 

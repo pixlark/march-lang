@@ -18,7 +18,7 @@ func f(x: int, t: tuple) : tuple
 // Function declarations reduce to lambda assignment:
 
 // Lambda creation
-let f =
+let f :=
 	lambda { x: int, t: tuple } : tuple
 	{
 		return x + y;

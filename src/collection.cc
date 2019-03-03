@@ -36,6 +36,9 @@ namespace Collection {
 	}
 	void destroy_everything()
 	{
+		for (int i = 0; i < ptrs.size; i++) {
+			free(ptrs[i]);
+		}
 		ptrs.dealloc();
 	}
 }

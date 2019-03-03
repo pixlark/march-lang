@@ -77,13 +77,25 @@ struct Compiler {
 			source.push(Instr::with_type_and_arg(INSTR_MAKE_TUPLE,
 												 Value::make_integer(expr->tuple.size)));
 		} break;
-		case EXPR_LET: {
-			compile_expr(expr->let.right);
-			source.push(Instr::with_type_and_arg(INSTR_BIND,
-												 Value::make_string_from_intern(expr->let.symbol)));
-		} break;
 		default:
 			fatal_internal("Switch in Compiler::compile_expr() incomplete");
+			break;
+		}
+	}
+	void compile_stmt(Stmt * stmt)
+	{
+		switch (stmt->type) {
+		case STMT_LET: {
+			compile_expr(stmt->let.right);
+			source.push(Instr::with_type_and_arg(INSTR_BIND,
+												 Value::make_string_from_intern(stmt->let.symbol)));
+		} break;
+		case STMT_PRINT: {
+			compile_expr(stmt->print.expr);
+			source.push(Instr::with_type(INSTR_POP_AND_OUTPUT));
+		} break;
+		default:
+			fatal_internal("Switch in Compiler::compile_stmt() incomplete");
 			break;
 		}
 	}
@@ -171,8 +183,7 @@ struct VM {
 			if (global_table.find(symbol) != -1) {
 				fatal("Tried to declare variable %s which is already bound", symbol);
 			}
-			// Don't pop because it's an expression - the return value of let is what gets let
-			Value to_bind = op_stack[op_stack.size - 1];
+			Value to_bind = op_stack.pop();
 			global_table.set(symbol, to_bind);
 		} break;
 		default:
@@ -209,13 +220,12 @@ int main(int argc, char ** argv)
 	
 	while (!parser.at_end()) {
 		// Get AST
-		Expr * expr = parser.parse_expr();
+		Stmt * stmt = parser.parse_stmt();
 
 		// Compile AST to bytecode
 		Compiler compiler;
 		compiler.alloc();
-		compiler.compile_expr(expr);
-		compiler.source.push(Instr::with_type(INSTR_POP_AND_OUTPUT));
+		compiler.compile_stmt(stmt);
 
 		// Run bytecode
 		vm.prime(compiler.source.arr, compiler.source.size);
@@ -225,8 +235,8 @@ int main(int argc, char ** argv)
 
 		// Free some stuff
 		compiler.dealloc();
-		expr->deep_free();
-		free(expr);
+		stmt->deep_free();
+		free(stmt);
 
 		// Run garbage collector
 		vm.mark_all_bound_values();
